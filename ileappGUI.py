@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=wildcard-import,unused-wildcard-import,too-many-lines,invalid-name,line-too-long,unused-import,redefined-outer-name,global-statement,broad-exception-caught
 
 import tkinter as tk
 import typing
@@ -9,15 +10,23 @@ import traceback
 import ileapp
 import webbrowser
 import base64
+import os
+import sys
 
 import scripts.plugin_loader as plugin_loader
 import leapp_functions.app.history as history
 
 from PIL import Image, ImageTk
-from tkinter import ttk, filedialog as tk_filedialog, messagebox as tk_msgbox
+from tkinter import ttk, filedialog as tk_filedialog, messagebox as tk_msgbox, simpledialog as tk_simpledialog
 from scripts.version_info import leapp_name, leapp_version, check_runtime_dependencies
+from scripts.search_files import (
+    get_itunes_backup_type,
+    check_itunes_backup_status,
+    decrypt_itunes_backup,
+)
 from scripts.search_files import *
 from scripts.raw_image import RAW_IMAGE_LABEL, RAW_IMAGE_SUFFIXES
+from scripts.ilapfuncs import lava_only_artifacts
 from scripts.ilapfuncs import *
 from scripts.tz_offset import tzvalues
 from scripts.modules_to_exclude import modules_to_exclude
@@ -249,7 +258,7 @@ def ValidateInput():
                 if encrypted:
                     decryption_keys = None
                     while not decryption_keys:
-                        password = tk.simpledialog.askstring(
+                        password = tk_simpledialog.askstring(
                             "Detected encrypted iTunes backup",
                             "iTunes Backup password:",
                             show='*',
@@ -509,11 +518,7 @@ def open_settings_window():
 
 
 def resource_path(filename):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
+    base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
     return os.path.join(base_path, 'assets', filename)
 
 
@@ -530,8 +535,10 @@ def process(casedata):
         # ios file system extractions contain paths > 260 char, which causes problems
         # This fixes the problem by prefixing \\?\ on each windows path.
         if is_platform_windows():
-            if input_path[1] == ':' and extracttype == 'fs': input_path = '\\\\?\\' + input_path.replace('/', '\\')
-            if output_folder[1] == ':': output_folder = '\\\\?\\' + output_folder.replace('/', '\\')
+            if input_path[1] == ':' and extracttype == 'fs':
+                input_path = '\\\\?\\' + input_path.replace('/', '\\')
+            if output_folder[1] == ':':
+                output_folder = '\\\\?\\' + output_folder.replace('/', '\\')
 
         # re-create modules list based on user selection
         selected_modules = get_selected_modules()
@@ -838,12 +845,13 @@ def case_data():
 
         if logo_path and os.path.exists(logo_path):
             agency_logo_load_error = None
+            agency_logo_base64_encoded = ''
             with open(logo_path, 'rb') as agency_logo_file:
-                agency_logo_mimetype = guess_mime(agency_logo_file)
+                agency_logo_mimetype = guess_mime(agency_logo_file) or ''
                 if agency_logo_mimetype and 'image' in agency_logo_mimetype:
                     try:
-                        agency_logo_base64_encoded = base64.b64encode(agency_logo_file.read())
-                    except:
+                        agency_logo_base64_encoded = base64.b64encode(agency_logo_file.read()).decode('utf-8')
+                    except Exception:
                         agency_logo_load_error = 'Unable to encode the selected file in base64.'
                 else:
                     agency_logo_load_error = 'Selected file is not a valid picture file.'
@@ -954,8 +962,7 @@ check_runtime_dependencies()
 ## Main window creation
 main_window = tk.Tk()
 icon = resource_path('icon.png')
-loader: typing.Optional[plugin_loader.PluginLoader] = None
-loader = plugin_loader.PluginLoader()
+loader: plugin_loader.PluginLoader = plugin_loader.PluginLoader()
 mlist = {}
 profile_filename = None
 casedata = {'Case Number': tk.StringVar(),
